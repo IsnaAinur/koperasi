@@ -3,28 +3,25 @@
 namespace App\Controllers;
 
 use App\Controllers\BaseController;
+use App\Models\AngsuranModel; // Tambahkan ini
 
 class Angsuran extends BaseController
 {
     protected $db;
+    protected $angsuranModel;
 
     public function __construct()
     {
         $this->db = \Config\Database::connect();
+        $this->angsuranModel = new AngsuranModel(); // Inisialisasi Model
     }
 
     public function index()
     {
-        // Mengambil riwayat angsuran untuk tabel
-        $builder = $this->db->table('angsuran');
-        $builder->select('angsuran.*, anggota.nama, pinjaman.sisa_pinjaman');
-        $builder->join('pinjaman', 'pinjaman.id_pinjaman = angsuran.id_pinjam');
-        $builder->join('anggota', 'anggota.nik_anggota = pinjaman.nik_anggota');
-        $builder->orderBy('angsuran.id_angsuran', 'DESC');
-        $data['angsuran'] = $builder->get()->getResultArray();
+        // Menggunakan Model untuk mengambil riwayat
+        $data['angsuran'] = $this->angsuranModel->getRiwayatAngsuran();
 
-        // Mengambil daftar pinjaman untuk Modal (Hanya yang belum lunas)
-        // Kita tambahkan subquery untuk menghitung angsuran ke-berapa secara otomatis
+        // Mengambil daftar pinjaman untuk Modal (Tetap pakai Query Builder agar aman)
         $data['daftar_pinjaman'] = $this->db->table('pinjaman p')
             ->select('p.*, a.nama, (SELECT COUNT(*) FROM angsuran WHERE id_pinjam = p.id_pinjaman) as angsuran_ke_skrg')
             ->join('anggota a', 'a.nik_anggota = p.nik_anggota')
@@ -41,8 +38,8 @@ class Angsuran extends BaseController
         $bayar_bunga = $this->request->getPost('bayar_bunga');
         $total_bayar = $bayar_pokok + $bayar_bunga;
 
-        // 1. Simpan ke tabel angsuran
-        $this->db->table('angsuran')->insert([
+        // 1. Simpan menggunakan Model (Lebih aman)
+        $this->angsuranModel->save([
             'id_pinjam'    => $id_pinjam,
             'angsuran_ke'  => $this->request->getPost('angsuran_ke'),
             'tgl_bayar'    => $this->request->getPost('tgl_bayar'),
@@ -51,10 +48,10 @@ class Angsuran extends BaseController
             'total_bayar'  => $total_bayar,
         ]);
 
-        // 2. Update sisa_pinjaman di tabel pinjaman
+        // 2. Update sisa_pinjaman (Logika lama Anda tetap dipertahankan)
         $this->db->query("UPDATE pinjaman SET sisa_pinjaman = sisa_pinjaman - $bayar_pokok WHERE id_pinjaman = $id_pinjam");
 
-        // 3. Jika sisa pinjaman <= 0, ubah status jadi Lunas
+        // 3. Cek Status Lunas
         $pinjam = $this->db->table('pinjaman')->where('id_pinjaman', $id_pinjam)->get()->getRow();
         if ($pinjam->sisa_pinjaman <= 0) {
             $this->db->table('pinjaman')->where('id_pinjaman', $id_pinjam)->update(['status' => 'Lunas', 'sisa_pinjaman' => 0]);
@@ -65,17 +62,16 @@ class Angsuran extends BaseController
 
     public function delete($id)
     {
-        // 1. Ambil data angsuran yang mau dihapus untuk tahu jumlah pokoknya
-        $angsuran = $this->db->table('angsuran')->where('id_angsuran', $id)->get()->getRow();
+        $angsuran = $this->angsuranModel->find($id);
 
         if ($angsuran) {
-            // 2. Kembalikan saldo sisa_pinjaman (Tambah lagi karena batal bayar)
-            $this->db->query("UPDATE pinjaman SET sisa_pinjaman = sisa_pinjaman + $angsuran->bayar_pokok, status = 'Belum Lunas' WHERE id_pinjaman = $angsuran->id_pinjam");
+            // Logika lama Anda untuk kembalikan saldo
+            $this->db->query("UPDATE pinjaman SET sisa_pinjaman = sisa_pinjaman + " . $angsuran['bayar_pokok'] . ", status = 'Belum Lunas' WHERE id_pinjaman = " . $angsuran['id_pinjam']);
 
-            // 3. Hapus data angsuran
-            $this->db->table('angsuran')->where('id_angsuran', $id)->delete();
+            // Hapus via Model
+            $this->angsuranModel->delete($id);
 
-            return redirect()->to(base_url('angsuran'))->with('success', 'Data angsuran berhasil dihapus dan saldo pinjaman dikembalikan.');
+            return redirect()->to(base_url('angsuran'))->with('success', 'Data angsuran dihapus.');
         }
 
         return redirect()->to(base_url('angsuran'))->with('error', 'Data tidak ditemukan.');
@@ -84,23 +80,9 @@ class Angsuran extends BaseController
     public function search()
     {
         $keyword = $this->request->getGet('keyword');
+        $angsuran = $this->angsuranModel->searchAngsuran($keyword);
 
-        $db = \Config\Database::connect();
-        $builder = $db->table('angsuran');
-        $builder->select('angsuran.*, anggota.nama');
-        $builder->join('pinjaman', 'pinjaman.id_pinjaman = angsuran.id_pinjam');
-        $builder->join('anggota', 'anggota.nik_anggota = pinjaman.nik_anggota');
-
-        if ($keyword) {
-            $builder->groupStart()
-                    ->like('anggota.nama', $keyword)
-                    ->orLike('angsuran.id_pinjam', str_replace('P', '', strtoupper($keyword)))
-                    ->groupEnd();
-        }
-
-        $angsuran = $builder->get()->getResultArray();
-
-        // Kuncinya di sini: Kita tulis HTML-nya langsung supaya tidak error 'file not found'
+        // Bagian Echo HTML tetap dipertahankan sesuai kode asli Anda
         if (!empty($angsuran)) {
             $no = 1;
             foreach ($angsuran as $row) {

@@ -2,39 +2,37 @@
 
 namespace App\Controllers;
 
-// Gunakan BaseController agar fungsi request, session, dll tersedia
+use App\Models\AuthModel; // Tambahkan ini
+
 class Auth extends BaseController
 {
-    /**
-     * Menampilkan Halaman Login
-     * Ini yang menyebabkan error 404 jika tidak ada
-     */
+    protected $authModel;
+
+    public function __construct()
+    {
+        // Inisialisasi Model
+        $this->authModel = new AuthModel();
+    }
+
     public function index()
     {
-        // Jika sudah login, jangan kasih akses halaman login lagi, lempar ke dashboard
         if (session()->get('logged_in')) {
             return redirect()->to(base_url('/'));
         }
         
-        return view('login'); // Pastikan file ada di app/Views/login.php
+        return view('login'); 
     }
 
-    /**
-     * Memproses Data Login
-     */
     public function login()
     {
         $session = session();
-        $db = \Config\Database::connect();
-        
         $username = $this->request->getPost('username');
         $password = $this->request->getPost('password');
 
-        // Query ke tabel admin
-        $admin = $db->table('admin')->where('username', $username)->get()->getRowArray();
+        // Menggunakan Model untuk mencari user
+        $admin = $this->authModel->cekLogin($username);
 
         if ($admin) {
-            // Cek password hash
             if (password_verify($password, $admin['password'])) {
                 $ses_data = [
                     'id_petugas' => $admin['id_petugas'],
@@ -54,41 +52,38 @@ class Auth extends BaseController
     }
 
     public function profil()
-{
-    $db = \Config\Database::connect();
-    $id_petugas = session()->get('id_petugas');
+    {
+        $id_petugas = session()->get('id_petugas');
 
-    // Ambil data admin terbaru dari database
-    $data['admin'] = $db->table('admin')->where('id_petugas', $id_petugas)->get()->getRowArray();
+        // Ambil data admin terbaru menggunakan Model (find)
+        $data['admin'] = $this->authModel->find($id_petugas);
 
-    return view('layout/header') . view('profil', $data) . view('layout/footer');
-}
+        return view('layout/header') . view('profil', $data) . view('layout/footer');
+    }
 
     public function updateProfil()
     {
-        $db = \Config\Database::connect();
         $id_petugas = session()->get('id_petugas');
         $username = $this->request->getPost('username');
         $password = $this->request->getPost('password');
 
-        $updateData = ['username' => $username];
+        $updateData = [
+            'id_petugas' => $id_petugas,
+            'username'   => $username
+        ];
 
-        // Jika password diisi, maka update passwordnya (hash)
         if (!empty($password)) {
             $updateData['password'] = password_hash($password, PASSWORD_DEFAULT);
         }
 
-        $db->table('admin')->where('id_petugas', $id_petugas)->update($updateData);
+        // Simpan perubahan menggunakan fungsi save() bawaan Model
+        $this->authModel->save($updateData);
 
-        // Update session nama agar di header langsung berubah
         session()->set('user_name', $username);
 
         return redirect()->to('/profil')->with('success', 'Profil berhasil diperbarui!');
     }
 
-    /**
-     * Proses Logout
-     */
     public function logout()
     {
         session()->destroy();
