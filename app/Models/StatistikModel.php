@@ -11,12 +11,12 @@ class StatistikModel extends Model
     }
 
     public function get_total_simpanan() {
-        // Menghitung jumlah kolom 'jumlah' di tabel simpanan
-        return $this->db->table('simpanan')->selectSum('jumlah')->get()->getRow()->jumlah;
+        $query = $this->db->table('simpanan')->selectSum('jumlah')->get()->getRow();
+        return $query->jumlah ?? 0; // Memberikan 0 jika data kosong
     }
 
     public function get_total_pinjaman() {
-        // Menghitung jumlah kolom 'jumlah_pinjaman' di tabel pinjaman
-        return $this->db->table('pinjaman')->selectSum('jumlah_pinjaman')->get()->getRow()->jumlah_pinjaman;
+        $query = $this->db->table('pinjaman')->selectSum('jumlah_pinjaman')->get()->getRow();
+        return $query->jumlah_pinjaman ?? 0;
     }
 }

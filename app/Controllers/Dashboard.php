@@ -3,21 +3,22 @@
 namespace App\Controllers;
 
 use App\Controllers\BaseController;
+use App\Models\StatistikModel; // Import Modelnya
 
 class Dashboard extends BaseController
 {
     public function index()
     {
-        $db = \Config\Database::connect();
+        // Inisialisasi Model
+        $statistikModel = new StatistikModel();
 
-        // Mengambil data untuk Dashboard
+        // Mengambil data melalui fungsi yang ada di Model
         $data = [
-            'total_anggota'  => $db->table('anggota')->countAllResults(),
-            'total_simpanan' => $db->table('simpanan')->selectSum('jumlah')->get()->getRow()->jumlah ?? 0,
-            'total_pinjaman' => $db->table('pinjaman')->selectSum('jumlah_pinjaman')->get()->getRow()->jumlah_pinjaman ?? 0,
+            'total_anggota'  => $statistikModel->get_total_anggota(),
+            'total_simpanan' => $statistikModel->get_total_simpanan(),
+            'total_pinjaman' => $statistikModel->get_total_pinjaman(),
         ];
 
-        // Pastikan file view adalah 'dashboard.php' di folder views
         return view('dashboard', $data);
     }
 
