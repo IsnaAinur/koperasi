@@ -17,6 +17,15 @@ class AngsuranModel extends Model
         'total_bayar'
     ];
 
+    public function getPinjamanAktif()
+    {
+        return $this->db->table('pinjaman p')
+            ->select('p.*, a.nama, (SELECT COUNT(*) FROM angsuran WHERE id_pinjam = p.id_pinjaman) as angsuran_ke_skrg')
+            ->join('anggota a', 'a.nik_anggota = p.nik_anggota')
+            ->where('p.status', 'Belum Lunas')
+            ->get()->getResultArray();
+    }
+
     public function getRiwayatAngsuran()
     {
         return $this->select('angsuran.*, anggota.nama, pinjaman.sisa_pinjaman')
