@@ -7,135 +7,113 @@ use App\Models\AnggotaModel;
 
 class PinjamanController extends BaseController
 {
-    // Properti model
     protected $pinjamanModel;
     protected $anggotaModel;
 
-    public function __construct()
-    {
-        // Inisialisasi Model
+    public function __construct() {
         $this->pinjamanModel = new PinjamanModel();
         $this->anggotaModel = new AnggotaModel();
     }
 
-    public function index()
-    {
+    public function index() {
         $data = [
-            'pinjaman'     => $this->pinjamanModel->select('pinjaman.*, anggota.nama')
-                                                  ->join('anggota', 'anggota.nik_anggota = pinjaman.nik_anggota')
-                                                  ->findAll(),
+            'pinjaman'     => $this->pinjamanModel->getAllPinjaman(),
             'anggota_list' => $this->anggotaModel->findAll()
         ];
-
         return view('pinjaman', $data);
     }
 
-    public function save()
-    {
+    public function save() {
         $jumlah = $this->request->getPost('jumlah_pinjaman');
         $tenor  = $this->request->getPost('tenor');
         $bunga  = $this->request->getPost('bunga');
 
-        // Tambahkan hitungan bunga saat simpan baru agar sisa_pinjaman benar dari awal
         $total_bunga = ($jumlah * $bunga / 100) * $tenor;
-        $sisa_awal   = $jumlah + $total_bunga;
-
+        
         $this->pinjamanModel->insert([
             'nik_anggota'     => $this->request->getPost('id_anggota'),
             'jumlah_pinjaman' => $jumlah,
             'tenor'           => $tenor,
             'bunga'           => $bunga,
             'status'          => 'Belum Lunas',
-            'sisa_pinjaman'   => $sisa_awal, // Sisa otomatis menyertakan bunga
+            'sisa_pinjaman'   => $jumlah + $total_bunga,
         ]);
 
-        return redirect()->to(base_url('pinjaman'))->with('success', 'Data pinjaman berhasil ditambahkan!');
+        return redirect()->to('/pinjaman')->with('success', 'Data pinjaman berhasil ditambahkan!');
     }
 
     public function update()
     {
-        $id     = $this->request->getPost('id_pinjaman');
-        $jumlah = $this->request->getPost('jumlah_pinjaman');
-        $tenor  = $this->request->getPost('tenor');
-        $bunga  = $this->request->getPost('bunga');
-        $status = $this->request->getPost('status');
-
-        // Logika Hitung Sisa Otomatis
-        if ($status === 'Lunas') {
-            $sisa_pinjaman = 0;
-        } else {
-            $total_bunga = ($jumlah * $bunga / 100) * $tenor;
-            $sisa_pinjaman = $jumlah + $total_bunga;
+        $id = $this->request->getPost('id_pinjaman');
+        
+        if (!$id) {
+            return redirect()->back()->with('error', 'ID Pinjaman tidak ditemukan.');
         }
 
+        // Ambil semua data dari input Modal Edit
+        $status = $this->request->getPost('status');
+        $sisa   = $this->request->getPost('sisa_pinjaman');
+
         $data = [
-            'jumlah_pinjaman' => $jumlah,
-            'tenor'           => $tenor,
-            'bunga'           => $bunga,
-            'sisa_pinjaman'   => $sisa_pinjaman,
+            'nik_anggota'     => $this->request->getPost('id_anggota'),
+            'jumlah_pinjaman' => $this->request->getPost('jumlah_pinjaman'),
+            'tenor'           => $this->request->getPost('tenor'),
+            'bunga'           => $this->request->getPost('bunga'),
+            'sisa_pinjaman'   => ($status === 'Lunas') ? 0 : $sisa,
             'status'          => $status,
         ];
 
-        // REVISI: Menggunakan pinjamanModel (Bukan $this->db) untuk menghindari error null
-        $this->pinjamanModel->update($id, $data);
-
-        return redirect()->back()->with('success', 'Data pinjaman dan sisa saldo berhasil diperbarui.');
-    }
-
-    public function delete($id)
-    {
-        $this->pinjamanModel->delete($id);
-        return redirect()->to(base_url('pinjaman'))->with('success', 'Data pinjaman berhasil dihapus!');
-    }
-
-    public function search()
-    {
-        $keyword = $this->request->getGet('keyword');
-        $builder = $this->pinjamanModel->select('pinjaman.*, anggota.nama')
-                                       ->join('anggota', 'anggota.nik_anggota = pinjaman.nik_anggota');
-
-        if ($keyword) {
-            $builder->groupStart() // Mengelompokkan LIKE agar join tidak berantakan
-                    ->like('anggota.nama', $keyword)
-                    ->orLike('pinjaman.id_pinjaman', $keyword)
-                    ->groupEnd();
+        // Eksekusi update berdasarkan ID
+        if ($this->pinjamanModel->update($id, $data)) {
+            return redirect()->to('/pinjaman')->with('success', 'Data pinjaman berhasil diperbarui!');
+        } else {
+            return redirect()->back()->with('error', 'Gagal memperbarui data.');
         }
+    }
 
-        $pinjaman = $builder->findAll();
+    public function delete($id) {
+        $this->pinjamanModel->delete($id);
+        return redirect()->to('/pinjaman')->with('success', 'Data dihapus!');
+    }
+
+    // METHOD SEARCH TANPA FILE VIEW TAMBAHAN
+    public function search() {
+        $keyword  = $this->request->getGet('keyword');
+        $pinjaman = $this->pinjamanModel->searchPinjaman($keyword);
         
         if (empty($pinjaman)) {
-            return '<tr><td colspan="8" class="text-center">Data tidak ditemukan.</td></tr>';
+            return '<tr><td colspan="8" class="text-center p-4">Data tidak ditemukan.</td></tr>';
         }
 
         $output = '';
         foreach ($pinjaman as $row) {
-            $statusBadge = $row['status'] == 'Lunas' ? 'bg-success' : 'bg-warning text-dark';
-            $id_formatted = str_pad($row['id_pinjaman'], 3, '0', STR_PAD_LEFT);
-            
-            $output .= '<tr>
-                <td>PJN-' . $id_formatted . '</td>
-                <td>' . $row['nama'] . '</td>
-                <td>Rp ' . number_format($row['jumlah_pinjaman'], 0, ',', '.') . '</td>
-                <td>' . $row['tenor'] . ' Bulan</td>
-                <td>' . $row['bunga'] . '%</td>
-                <td>Rp ' . number_format($row['sisa_pinjaman'], 0, ',', '.') . '</td>
-                <td><span class="badge ' . $statusBadge . '">' . $row['status'] . '</span></td>
-                <td class="text-center">
-                    <button class="btn btn-primary btn-sm btn-edit" 
-                        data-bs-toggle="modal" 
-                        data-bs-target="#modalEditPinjaman"
-                        data-id="' . $row['id_pinjaman'] . '" 
-                        data-id_anggota="' . $row['nik_anggota'] . '"
-                        data-jumlah="' . $row['jumlah_pinjaman'] . '" 
-                        data-tenor="' . $row['tenor'] . '"
-                        data-bunga="' . $row['bunga'] . '" 
-                        data-status="' . $row['status'] . '"
-                        data-sisa="' . $row['sisa_pinjaman'] . '">
+            $id_formated = str_pad($row['id_pinjaman'], 3, '0', STR_PAD_LEFT);
+            $jumlah      = number_format($row['jumlah_pinjaman'], 0, ',', '.');
+            $sisa        = number_format($row['sisa_pinjaman'], 0, ',', '.');
+            $badgeColor  = $row['status'] == 'Lunas' ? 'bg-success' : 'bg-warning text-dark';
+            $nama        = esc($row['nama']);
+            $urlDelete   = base_url('pinjaman/delete/' . $row['id_pinjaman']);
+
+            // Menggunakan sintaks string yang lebih bersih
+            $output .= "
+            <tr>
+                <td>PJN-{$id_formated}</td>
+                <td>{$nama}</td>
+                <td>Rp {$jumlah}</td>
+                <td>{$row['tenor']} Bulan</td>
+                <td>{$row['bunga']}%</td>
+                <td>Rp {$sisa}</td>
+                <td><span class='badge {$badgeColor}'>{$row['status']}</span></td>
+                <td class='text-center'>
+                    <button class='btn btn-primary btn-sm btn-edit' 
+                        data-bs-toggle='modal' data-bs-target='#modalEditPinjaman'
+                        data-id='{$row['id_pinjaman']}' 
+                        data-status='{$row['status']}'>
                         Edit
                     </button>
-                    <a href="' . base_url('pinjaman/delete/' . $row['id_pinjaman']) . '" class="btn btn-danger btn-sm" onclick="return confirm(\'Hapus?\')">Hapus</a>
+                    <a href='{$urlDelete}' class='btn btn-danger btn-sm' onclick='return confirm(\"Hapus?\")'>Hapus</a>
                 </td>
-            </tr>';
+            </tr>";
         }
         return $output;
     }

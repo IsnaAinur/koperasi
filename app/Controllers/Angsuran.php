@@ -2,114 +2,89 @@
 
 namespace App\Controllers;
 
-use App\Controllers\BaseController;
 use App\Models\AngsuranModel;
 
 class Angsuran extends BaseController
 {
-    protected $db;
     protected $angsuranModel;
 
     public function __construct()
     {
-        $this->db = \Config\Database::connect();
         $this->angsuranModel = new AngsuranModel();
     }
 
     public function index()
     {
-        $data['angsuran'] = $this->angsuranModel->getRiwayatAngsuran();
-        $data['daftar_pinjaman'] = $this->db->table('pinjaman p')
-            ->select('p.*, a.nama, (SELECT COUNT(*) FROM angsuran WHERE id_pinjam = p.id_pinjaman) as angsuran_ke_skrg')
-            ->join('anggota a', 'a.nik_anggota = p.nik_anggota')
-            ->where('p.status', 'Belum Lunas')
-            ->get()->getResultArray();
-
+        $data = [
+            'angsuran'         => $this->angsuranModel->getRiwayatAngsuran(),
+            'daftar_pinjaman'  => $this->angsuranModel->getPinjamanAktif()
+        ];
         return view('angsuran', $data);
     }
 
     public function save()
     {
-        $id_pinjam   = $this->request->getPost('id_pinjam');
-        $bayar_pokok = $this->request->getPost('bayar_pokok');
-        $bayar_bunga = $this->request->getPost('bayar_bunga');
-        $total_bayar = $bayar_pokok + $bayar_bunga;
-
-        $this->db->transStart();
-
-        //Simpan riwayat angsuran
-        $this->angsuranModel->save([
-            'id_pinjam'   => $id_pinjam,
+        $payload = [
+            'id_pinjam'   => $this->request->getPost('id_pinjam'),
             'angsuran_ke' => $this->request->getPost('angsuran_ke'),
             'tgl_bayar'   => $this->request->getPost('tgl_bayar'),
-            'bayar_pokok' => $bayar_pokok,
-            'bayar_bunga' => $bayar_bunga,
-            'total_bayar' => $total_bayar,
-        ]);
+            'bayar_pokok' => $this->request->getPost('bayar_pokok'),
+            'bayar_bunga' => $this->request->getPost('bayar_bunga'),
+            'total_bayar' => $this->request->getPost('bayar_pokok') + $this->request->getPost('bayar_bunga'),
+        ];
 
-        //Update sisa pinjaman
-        $this->db->table('pinjaman')
-                ->where('id_pinjaman', $id_pinjam)
-                ->set('sisa_pinjaman', "sisa_pinjaman - $bayar_pokok", false)
-                ->update();
-
-        //Cek Status Lunas
-        $pinjam = $this->db->table('pinjaman')->where('id_pinjaman', $id_pinjam)->get()->getRow();
-        if ($pinjam->sisa_pinjaman <= 0) {
-            $this->db->table('pinjaman')
-                    ->where('id_pinjaman', $id_pinjam)
-                    ->update(['status' => 'Lunas', 'sisa_pinjaman' => 0]);
+        if ($this->angsuranModel->prosesBayar($payload)) {
+            return redirect()->to('/angsuran')->with('success', 'Pembayaran berhasil disimpan!');
         }
-
-        $this->db->transComplete();
-
-        if ($this->db->transStatus() === false) {
-            return redirect()->back()->with('error', 'Gagal memproses pembayaran. Silakan coba lagi.');
-        }
-
-        return redirect()->to(base_url('angsuran'))->with('success', 'Pembayaran angsuran berhasil disimpan!');
+        return redirect()->back()->with('error', 'Gagal memproses pembayaran.');
     }
 
     public function delete($id)
     {
-        $angsuran = $this->angsuranModel->find($id);
-
-        if ($angsuran) {
-            $this->db->query("UPDATE pinjaman SET sisa_pinjaman = sisa_pinjaman + " . $angsuran['bayar_pokok'] . ", status = 'Belum Lunas' WHERE id_pinjaman = " . $angsuran['id_pinjam']);
-            $this->angsuranModel->delete($id);
-            return redirect()->to(base_url('angsuran'))->with('success', 'Data angsuran dihapus.');
+        if ($this->angsuranModel->hapusAngsuran($id)) {
+            return redirect()->to('/angsuran')->with('success', 'Data berhasil dihapus.');
         }
-
-        return redirect()->to(base_url('angsuran'))->with('error', 'Data tidak ditemukan.');
+        return redirect()->to('/angsuran')->with('error', 'Gagal menghapus data.');
     }
 
     public function search()
-    {
-        $keyword = $this->request->getGet('keyword');
-        $angsuran = $this->angsuranModel->searchAngsuran($keyword);
+{
+    $keyword = $this->request->getGet('keyword');
+    $angsuran = $this->angsuranModel->searchAngsuran($keyword);
 
-        if (!empty($angsuran)) {
-            $no = 1;
-            foreach ($angsuran as $row) {
-                echo "<tr>
-                    <td>" . $no++ . "</td>
-                    <td><span class='fw-bold text-primary'>INV-" . str_pad($row['id_angsuran'], 3, '0', STR_PAD_LEFT) . "</span></td>
-                    <td class='text-center'>P" . str_pad($row['id_pinjam'], 3, '0', STR_PAD_LEFT) . "</td>
-                    <td>" . $row['nama'] . "</td>
-                    <td class='text-center'><span class='badge bg-info text-dark'>" . $row['angsuran_ke'] . "</span></td>
-                    <td>" . date('d/m/Y', strtotime($row['tgl_bayar'])) . "</td>
-                    <td>Rp " . number_format($row['bayar_pokok'], 0, ',', '.') . "</td>
-                    <td>Rp " . number_format($row['bayar_bunga'], 0, ',', '.') . "</td>
-                    <td class='fw-bold text-success'>Rp " . number_format($row['total_bayar'], 0, ',', '.') . "</td>
-                    <td class='text-center'>
-                        <a href='" . base_url('angsuran/delete/' . $row['id_angsuran']) . "' class='btn btn-outline-danger btn-sm' onclick='return confirm(\"Hapus?\")'>
-                            <i class='bi bi-trash'></i>
-                        </a>
-                    </td>
-                </tr>";
-            }
-        } else {
-            echo "<tr><td colspan='10' class='text-center p-4'>Data tidak ditemukan.</td></tr>";
+    if (!empty($angsuran)) {
+        $no = 1;
+        $html = "";
+        foreach ($angsuran as $row) {
+            $id_angsuran = str_pad($row['id_angsuran'], 3, '0', STR_PAD_LEFT);
+            $id_pinjam   = str_pad($row['id_pinjam'], 3, '0', STR_PAD_LEFT);
+            $tgl_bayar   = date('d/m/Y', strtotime($row['tgl_bayar']));
+            $pokok       = number_format($row['bayar_pokok'], 0, ',', '.');
+            $bunga       = number_format($row['bayar_bunga'], 0, ',', '.');
+            $total       = number_format($row['total_bayar'], 0, ',', '.');
+            $nama        = esc($row['nama']);
+            $url_delete  = base_url('angsuran/delete/' . $row['id_angsuran']);
+
+            $html .= "<tr>
+                <td>" . $no++ . "</td>
+                <td><span class='fw-bold text-primary'>INV-{$id_angsuran}</span></td>
+                <td class='text-center'>P{$id_pinjam}</td>
+                <td>{$nama}</td>
+                <td class='text-center'><span class='badge bg-info text-dark'>{$row['angsuran_ke']}</span></td>
+                <td>{$tgl_bayar}</td>
+                <td>Rp {$pokok}</td>
+                <td>Rp {$bunga}</td>
+                <td class='fw-bold text-success'>Rp {$total}</td>
+                <td class='text-center'>
+                    <a href='{$url_delete}' class='btn btn-outline-danger btn-sm' onclick='return confirm(\"Hapus?\")'>
+                        <i class='bi bi-trash'></i>
+                    </a>
+                </td>
+            </tr>";
         }
+        echo $html;
+    } else {
+        echo "<tr><td colspan='10' class='text-center p-4'>Data tidak ditemukan.</td></tr>";
     }
+}
 }
