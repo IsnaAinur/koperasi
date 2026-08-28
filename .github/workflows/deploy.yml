@@ -3,7 +3,7 @@ name: Deploy to InfinityFree
 on:
   push:
     branches:
-      - main  # Otomatis jalan saat kamu melakukan push ke branch main
+      - main
 
 jobs:
   web-deploy:
@@ -20,8 +20,7 @@ jobs:
           server: ${{ secrets.FTP_HOST }}
           username: ${{ secrets.FTP_USERNAME }}
           password: ${{ secrets.FTP_PASSWORD }}
-          server-dir: /htdocs/
-          # Mengabaikan file/folder yang tidak perlu di-upload ke server
+          server-dir: /htdocs/koperasi/
           exclude: |
             **/.git*
             **/.git*/**
