@@ -1,5 +1,3 @@
-
-
 <nav class="nav-bar-custom">
     <div class="nav-container">
         <div class="d-flex align-items-center justify-content-between">

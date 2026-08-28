@@ -72,16 +72,16 @@ class Filters extends BaseFilters
      * }
      */
     public array $globals = [
-        'before' => [
-            // 'honeypot',
-            // 'csrf',
-            // 'invalidchars',
-        ],
-        'after' => [
-            // 'honeypot',
-            // 'secureheaders',
-        ],
-    ];
+    'before' => [
+        'auth' => [
+            'except' => [
+                'login',
+                'auth/login',
+                'auth/login/*'
+            ]
+        ]
+    ],
+];
 
     /**
      * List of filter aliases that works on a

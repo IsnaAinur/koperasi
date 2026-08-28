@@ -5,13 +5,11 @@ use CodeIgniter\Router\RouteCollection;
 /**
  * @var RouteCollection $routes
  */
-
-// --- ROUTE BEBAS AKSES (TANPA LOGIN) ---
 $routes->get('login', 'Auth::index');
+$routes->get('auth/login', 'Auth::index');
 $routes->post('auth/login', 'Auth::login');
 $routes->get('logout', 'Auth::logout');
 
-// --- ROUTE TERPROTEKSI (WAJIB LOGIN) ---
 $routes->group('', ['filter' => 'auth'], function($routes) {
     
     // DASHBOARD & PANDUAN
@@ -21,7 +19,7 @@ $routes->group('', ['filter' => 'auth'], function($routes) {
     $routes->post('profil/update', 'Auth::updateProfil');
 
     // ANGGOTA
-    $routes->get('anggota', 'AnggotaController::anggota'); // Pastikan nama controller konsisten
+    $routes->get('anggota', 'AnggotaController::anggota');
     $routes->get('anggota/search', 'AnggotaController::search');
     $routes->get('anggota/add', 'AnggotaController::tambah');
     $routes->post('anggota/save', 'AnggotaController::save');

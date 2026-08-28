@@ -174,7 +174,6 @@
     });
 
     // JS untuk modal edit (Data Binding)
-    // JS untuk modal edit (Data Binding)
     const modalEdit = document.getElementById('modalEditAnggota');
 if(modalEdit) {
     modalEdit.addEventListener('show.bs.modal', function (event) {

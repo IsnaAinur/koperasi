@@ -1,23 +1,21 @@
 <style>
     .cta-slim-card {
-        /* MENGUBAH JADI MELAYANG */
         position: fixed;
-        bottom: 25px; /* Jarak dari bawah */
-        right: 25px;  /* Jarak dari kanan */
-        z-index: 9999; /* Agar selalu di atas elemen lain */
+        bottom: 25px;
+        right: 25px;
+        z-index: 9999;
         
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        border-radius: 20px; /* Lebih membulat agar kesan mengambang lebih kuat */
+        border-radius: 20px;
         padding: 15px 25px;
         width: 100%;
-        max-width: 450px; /* Batasi lebar agar tidak menutupi seluruh layar */
-        box-shadow: 0 10px 30px rgba(102, 126, 234, 0.4); /* Shadow lebih tebal */
+        max-width: 450px;
+        box-shadow: 0 10px 30px rgba(102, 126, 234, 0.4);
         border: 2px solid rgba(255, 255, 255, 0.1);
         color: white;
         transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
     }
 
-    /* Efek saat card di-hover */
     .cta-slim-card:hover {
         transform: translateY(-5px);
         box-shadow: 0 15px 35px rgba(102, 126, 234, 0.5);

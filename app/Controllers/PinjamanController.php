@@ -94,7 +94,6 @@ class PinjamanController extends BaseController
             $nama        = esc($row['nama']);
             $urlDelete   = base_url('pinjaman/delete/' . $row['id_pinjaman']);
 
-            // Menggunakan sintaks string yang lebih bersih
             $output .= "
             <tr>
                 <td>PJN-{$id_formated}</td>
